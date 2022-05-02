@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 from pathlib import Path
+import rioxarray
 
 # optional work to be added: input for user specifying file names and/or explaining file import restrictions
 
@@ -26,13 +27,18 @@ for path in paths:
 		quit()
 
 research_area = gpd.read_file('files/research_area.shp') # assigning research shapefile to variable using geopandas
-soil = rio.open('files/soil.tif')
-rainfall = rio.open('files/rainfall.tif')
-landcover = rio.open('files/landcover.tif')
-slope = rio.open('files/slope.tif') # assigning raster files of soil erosion risk factors to variables using rasterio
+with rio.open('files/soil.tif') as dataset:
+	soil = dataset.read()
+with rio.open('files/rainfall.tif') as dataset:
+	rainfall = dataset.read()
+with rio.open('files/landcover.tif') as dataset:
+	landcover = dataset.read()
+with rio.open('files/slope.tif') as dataset:
+	slope = dataset.read() # assigning raster files of soil erosion risk factors to variables using rasterio
 
 if research_area.crs != None:
 	crs = research_area.crs # variable crs is assigned the CRS from the research_area shapefile if it has one
+	soil.crs = soil.rio.reproject(research_area.crs)
 else:
 	print('No Coordinate Reference System found in Research Area Shapefile, please check README')
 	quit()	# if the research_area shapefile does not have a CRS, then the script will print an error and exit
