@@ -1,6 +1,6 @@
 <PAMDataset>
-  <Metadata domain="Esri">
-    <MDI key="PyramidResamplingType">NEAREST</MDI>
+  <Metadata>
+    <MDI key="DataType">Thematic</MDI>
   </Metadata>
   <PAMRasterBand band="1">
     <Histograms>
