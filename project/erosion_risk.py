@@ -195,29 +195,93 @@ with rio.open('files/soil.tif') as src:
 print('Data types: soil: '+ str(type(soil)) + ' , rainfall: ' + str(type(rainfall)) + ' , landcover: '
 	  + str(type(landcover)) + ', slope: ' + str(type(slope))) # visual check that each variable is assigned a numpy array
 
-#np.seterr(divide='ignore', invalid='ignore') # allowing numpy division by zero or invalid parameters
-
-# calculations combining risk factors soil, slope and rainfall as follows, an error will appear if one or more of the
+# Calculations combining risk factors soil, slope and rainfall as follows, an error will appear if one or more of the
 # tifs cover a smaller extent than the research area. Consider adding check by comparing width and height of clipped tifs.
-very_high = ((soil == 1) & (slope > 7) & (rainfall >= 800))
-high = ((soil == 1) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) | \
-	   ((soil == 2) & (slope > 7) & (rainfall >= 800)) | \
-	   ((soil == 1) & (slope > 7) & (rainfall < 800))
-moderate = ((soil == 1) & (slope >= 3) & (slope <= 7) & (rainfall < 800)) | \
-		   ((soil == 1) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) | \
-		   ((soil == 2) & (slope > 7) & (rainfall < 800)) | \
-		   ((soil == 2) & (slope >= 3) & (slope <= 7) & (rainfall >= 800))
-lower = ((soil == 1) & (slope >= 2) & (slope <= 3) & (rainfall < 800)) | \
-		((soil == 2) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) | \
-		((soil == 3) & (slope > 7) & (rainfall >= 800))
-slight = (soil == 4) | \
-		 ((soil == 1) & (slope < 2) & (rainfall >= 800)) | \
-		 ((soil == 2) & (slope < 2) & (rainfall >= 800)) | \
-		 ((soil == 3) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) | \
-		 ((soil == 3) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) | \
-		 ((soil == 3) & (slope < 2) & (rainfall >= 800))
+# The * 1 ensures that the output is saved as integer, otherwise it would be saved as boolean.
+very_high = ((soil == 1) & (slope > 7) & (rainfall >= 800)) * 1
+high = ((soil == 1) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) * 1 | \
+	   ((soil == 2) & (slope > 7) & (rainfall >= 800)) * 1 | \
+	   ((soil == 1) & (slope > 7) & (rainfall < 800)) * 1
+moderate = ((soil == 1) & (slope >= 3) & (slope <= 7) & (rainfall < 800)) * 1 | \
+		   ((soil == 1) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) * 1 | \
+		   ((soil == 2) & (slope > 7) & (rainfall < 800)) * 1 | \
+		   ((soil == 2) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) * 1
+lower = ((soil == 1) & (slope >= 2) & (slope <= 3) & (rainfall < 800)) * 1 | \
+		((soil == 2) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) * 1 | \
+		((soil == 3) & (slope > 7) & (rainfall >= 800)) * 1
+slight = ((soil == 1) & (slope < 2) & (rainfall >= 800)) * 1 | \
+		 ((soil == 2) & (slope < 2) & (rainfall >= 800)) * 1 | \
+		 ((soil == 3) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) * 1 | \
+		 ((soil == 3) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) * 1 | \
+		 ((soil == 3) & (slope < 2) & (rainfall >= 800)) * 1
+
+# Reclassification to allow combination of very high to slight risk. Changing  1 to 1 (value for slight is not changed),
+# 2 (lower), 3 (moderate), 4 (high) and 5 (very high).
+very_high[np.where(very_high == 1)] = 5
+high[np.where(high == 1)] = 4
+moderate[np.where(moderate == 1)] = 3
+lower[np.where(lower == 1)] = 2
+
+# Combining all risk levels in one numpy array assigned to variable risk1
+risk1 = very_high + high + moderate + lower + slight
 
 '''
+# The following is code to save each risk category and the combination thereof as tif files for potential trouble-
+# shooting use and/or verification of the results so far. Uncomment for use but note that if files already exist there
+# might appear errors as no conditions to delete/ignore existing files were added. Manual deletion advised.
+with rasterio.open('files/risk1.tif', "w", **ra_meta) as risk1_dataset:
+	risk1_dataset.write(risk1)  # output of combination of slope/soil/rainfall risk
+
+with rasterio.open('files/very_high.tif', "w", **ra_meta) as very_high_risk:
+	very_high_risk.write(very_high)  # output of clipped image with updated meta data
+
 with rasterio.open('files/high.tif', "w", **ra_meta) as high_risk:
 	high_risk.write(high)  # output of clipped image with updated meta data
+
+with rasterio.open('files/moderate.tif', "w", **ra_meta) as moderate_risk:
+	moderate_risk.write(moderate)  # output of clipped image with updated meta data
+
+with rasterio.open('files/lower.tif', "w", **ra_meta) as lower_risk:
+	lower_risk.write(lower)  # output of clipped image with updated meta data
+
+with rasterio.open('files/slight.tif', "w", **ra_meta) as slight_risk:
+	slight_risk.write(slight)  # output of clipped image with updated meta data
 '''
+
+# Calculation to combine previously created risk map incorporating soil, rainfall and slope with landcover.
+very_high_final = ((landcover == 4) & (risk1 == 5)) * 1
+high_final = ((landcover == 3) & (risk1 == 5)) * 1 | \
+			 ((landcover == 4) & (risk1 >= 3) & (risk1 <= 4)) * 1
+moderate_final = ((landcover == 1) & (risk1 == 5)) * 1 | \
+				 ((landcover == 2) & (risk1 >= 4) & (risk1 <= 5)) * 1 | \
+				 ((landcover == 3) & (risk1 >= 3) & (risk1 <= 4)) * 1 | \
+				 ((landcover == 4) & (risk1 <= 2)) * 1
+lower_final = ((landcover == 1) & (risk1 >= 3) & (risk1 <= 4)) * 1 | \
+			  ((landcover == 2) & (risk1 >= 2) & (risk1 <= 3)) * 1 | \
+			  ((landcover == 3) & (risk1 <= 2)) * 1
+slight_final = ((landcover == 1) & (risk1 <= 2)) * 1 | \
+			   ((landcover == 2) & (risk1 == 1)) * 1
+none_final = (landcover == 0) * 1
+
+# Reclassifying to allow addition of all risk scores in one tif. Note difference in risk values (1 to 6 compared
+# to 1 to 5) due to addition of sixth risk category.
+very_high_final[np.where(very_high_final == 1)] = 6
+high_final[np.where(high_final == 1)] = 5
+moderate_final[np.where(moderate_final == 1)] = 4
+lower_final[np.where(lower_final == 1)] = 3
+slight_final[np.where(slight_final == 1)] = 2
+none_final[np.where(none_final == 1)] = 1
+
+# Calculation of final risk score.
+risk_final = very_high_final + high_final + moderate_final + lower_final + slight_final + none_final
+
+# Saving of final map. If the file existed beforehand, then it will be deleted and replaced by the new one.
+if os.path.exists('files/Soil_Erosion_Risk.tif'):
+	os.remove('files/Soil_Erosion_Risk.tif')
+	with rasterio.open('files/Soil_Erosion_Risk.tif', "w", **ra_meta) as risk_final_dataset:
+		risk_final_dataset.write(risk_final)  # output of combination of slope/soil/rainfall risk plus landcover risk
+	print('Old Soil_Erosion_Risk.tif has been replaced.')
+else:
+	with rasterio.open('files/Soil_Erosion_Risk.tif', "w", **ra_meta) as risk_final_dataset:
+		risk_final_dataset.write(risk_final)  # output of combination of slope/soil/rainfall risk plus landcover risk
+	print('Soil Erosion Risk tif has been created.')
