@@ -63,6 +63,7 @@ with rio.open('files/soil.tif') as dataset1:
 						 "width": out_img.shape[2],
 						 "transform": out_transform,
 						 "crs": pycrs.parse.from_epsg_code(epsg_code).to_proj4()}) # updating meta data for new cropped image
+		ra_meta = out_meta  # ra_meta as variable to be used later outside this if statement
 		if os.path.exists('files/soil_clip.tif'):
 			os.remove('files/soil_clip.tif') # deletes clipped file if it exists so that script can be run repeatedly
 			with rasterio.open('files/soil_clip.tif', "w", **out_meta) as soil_clip:
@@ -194,5 +195,29 @@ with rio.open('files/soil.tif') as src:
 print('Data types: soil: '+ str(type(soil)) + ' , rainfall: ' + str(type(rainfall)) + ' , landcover: '
 	  + str(type(landcover)) + ', slope: ' + str(type(slope))) # visual check that each variable is assigned a numpy array
 
-np.seterr(divide='ignore', invalid='ignore') # allowing numpy division by zero or invalid parameters
+#np.seterr(divide='ignore', invalid='ignore') # allowing numpy division by zero or invalid parameters
 
+# calculations combining risk factors soil, slope and rainfall as follows, an error will appear if one or more of the
+# tifs cover a smaller extent than the research area. Consider adding check by comparing width and height of clipped tifs.
+very_high = ((soil == 1) & (slope > 7) & (rainfall >= 800))
+high = ((soil == 1) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) | \
+	   ((soil == 2) & (slope > 7) & (rainfall >= 800)) | \
+	   ((soil == 1) & (slope > 7) & (rainfall < 800))
+moderate = ((soil == 1) & (slope >= 3) & (slope <= 7) & (rainfall < 800)) | \
+		   ((soil == 1) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) | \
+		   ((soil == 2) & (slope > 7) & (rainfall < 800)) | \
+		   ((soil == 2) & (slope >= 3) & (slope <= 7) & (rainfall >= 800))
+lower = ((soil == 1) & (slope >= 2) & (slope <= 3) & (rainfall < 800)) | \
+		((soil == 2) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) | \
+		((soil == 3) & (slope > 7) & (rainfall >= 800))
+slight = (soil == 4) | \
+		 ((soil == 1) & (slope < 2) & (rainfall >= 800)) | \
+		 ((soil == 2) & (slope < 2) & (rainfall >= 800)) | \
+		 ((soil == 3) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) | \
+		 ((soil == 3) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) | \
+		 ((soil == 3) & (slope < 2) & (rainfall >= 800))
+
+'''
+with rasterio.open('files/high.tif', "w", **ra_meta) as high_risk:
+	high_risk.write(high)  # output of clipped image with updated meta data
+'''
