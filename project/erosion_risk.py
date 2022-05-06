@@ -16,14 +16,14 @@ from fiona.crs import from_epsg
 import pycrs
 import os
 
-# optional work to be added: input for user specifying file names and/or explaining file import restrictions
+# Additional work to be added: input for user specifying file names and/or explaining file import restrictions
 
-# script assumes that raster imagery is prepared with identical resolution, as in identical cell size
+# Script assumes that raster imagery is prepared with identical resolution/identical cell size
 paths = ('files/soil.tif','files/rainfall.tif','files/landcover.tif','files/slope.tif','files/research_area.shp',
 		 'files/research_area.dbf','files/research_area.shx')
 		# 'files/research_area.cpg','files/research_area.prj','files/research_area.sbn','files/research_area.shp.xml',
-		# 'files/research_area.sbx' these are optional parts of the shapefiles, consider adding checks
-        # checking file locations of tif files and all files typically belonging to a shapefile to confirm that they exist
+		# 'files/research_area.sbx' These are optional parts of the shapefiles, consider adding checks.
+        # Checking file locations of tif files and all files typically belonging to a shapefile to confirm that they exist.
 
 for path in paths:
 	p = Path(path)
@@ -41,23 +41,28 @@ if research_area.crs != None:
 
 else:
 	print('No Coordinate Reference System found in Research Area Shapefile, please check README.')
-	quit()	# if the research_area shapefile does not have a CRS, then the script will print an error and exit
+	quit()	# If the research_area shapefile does not have a CRS, then the script will print an error and exit
 
-# consider adding user input for CRS if research_area does not have one
+# Consider adding user input for CRS if research_area does not have one
 
-# code for clipping adapted from https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
+# Code for clipping adapted from https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
 def getFeatures(gdf):
-    #Function to transform research area shapefile into coordinates that rasterio can use
+    # Function to transform research area shapefile into coordinates that rasterio can use
     import json
     return [json.loads(gdf.to_json())['features'][0]['geometry']]
 
-clip_coords = getFeatures(research_area) # boundary of research_area assigned as coordinates to clip_coords
+clip_coords = getFeatures(research_area) # Boundary of research_area assigned as coordinates to clip_coords
 
+# The following four blocks check if the different tifs have the same CRS as the research area and clip the tif
+# to the boundaries of the research area if True. If not, the script is quit with an appropriate error message.
+# The clipped tifs are then saved (existing tifs with the name are deleted beforehand) as they might be helpful
+# for other processing not covered in this script.
 with rio.open('files/soil.tif') as dataset1:
-	if dataset1.crs == cooref: # script only continues when crs for research_area and soil.tif are identical
-		out_img, out_transform = mask(dataset=dataset1, shapes=clip_coords, crop=True) # cropping image to research_area
-		out_meta = dataset1.meta.copy() # copying original image meta data
-		epsg_code = int(dataset1.crs.data['init'][5:]) # reading CRS data from original image
+	if dataset1.crs == cooref: # Script only continues when crs for research_area and soil.tif are identical
+		out_img, out_transform = mask(dataset=dataset1, shapes=clip_coords, crop=True) # Cropping image to research_area
+		out_meta = dataset1.meta.copy() # Copying original image meta data
+		epsg_code = int(dataset1.crs.data['init'][5:]) # Reading CRS data from original image
+		epsg_later = epsg_code # Saving EPSG code of project for later use.
 		out_meta.update({"driver": "GTiff",
 						 "height": out_img.shape[1],
 						 "width": out_img.shape[2],
@@ -192,8 +197,10 @@ with rio.open('files/soil.tif') as src:
 				dst_crs=dst_crs,
 				resampling=rio.warp.Resampling.nearest)
 '''
+# Visual check that each variable is assigned a numpy array, not required for further processing and meant as a way to
+# ensure integrity of data.
 print('Data types: soil: '+ str(type(soil)) + ' , rainfall: ' + str(type(rainfall)) + ' , landcover: '
-	  + str(type(landcover)) + ', slope: ' + str(type(slope))) # visual check that each variable is assigned a numpy array
+	  + str(type(landcover)) + ', slope: ' + str(type(slope)))
 
 # Calculations combining risk factors soil, slope and rainfall as follows, an error will appear if one or more of the
 # tifs cover a smaller extent than the research area. Consider adding check by comparing width and height of clipped tifs.
@@ -222,13 +229,13 @@ high[np.where(high == 1)] = 4
 moderate[np.where(moderate == 1)] = 3
 lower[np.where(lower == 1)] = 2
 
-# Combining all risk levels in one numpy array assigned to variable risk1
+# Combining all risk levels in one numpy array assigned to variable risk1.
 risk1 = very_high + high + moderate + lower + slight
 
 '''
 # The following is code to save each risk category and the combination thereof as tif files for potential trouble-
 # shooting use and/or verification of the results so far. Uncomment for use but note that if files already exist there
-# might appear errors as no conditions to delete/ignore existing files were added. Manual deletion advised.
+# might appear errors as no conditions to delete/ignore existing files were added. Manual deletion beforehand advised.
 with rasterio.open('files/risk1.tif', "w", **ra_meta) as risk1_dataset:
 	risk1_dataset.write(risk1)  # output of combination of slope/soil/rainfall risk
 
@@ -248,7 +255,7 @@ with rasterio.open('files/slight.tif', "w", **ra_meta) as slight_risk:
 	slight_risk.write(slight)  # output of clipped image with updated meta data
 '''
 
-# Calculation to combine previously created risk map incorporating soil, rainfall and slope with landcover.
+# Calculation to combine previously created risk map consisting of soil, rainfall and slope, with landcover.
 very_high_final = ((landcover == 4) & (risk1 == 5)) * 1
 high_final = ((landcover == 3) & (risk1 == 5)) * 1 | \
 			 ((landcover == 4) & (risk1 >= 3) & (risk1 <= 4)) * 1
@@ -279,9 +286,19 @@ risk_final = very_high_final + high_final + moderate_final + lower_final + sligh
 if os.path.exists('files/Soil_Erosion_Risk.tif'):
 	os.remove('files/Soil_Erosion_Risk.tif')
 	with rasterio.open('files/Soil_Erosion_Risk.tif', "w", **ra_meta) as risk_final_dataset:
-		risk_final_dataset.write(risk_final)  # output of combination of slope/soil/rainfall risk plus landcover risk
+		risk_final_dataset.write(risk_final)  # Output of combination of slope/soil/rainfall risk plus landcover risk.
 	print('Old Soil_Erosion_Risk.tif has been replaced.')
 else:
 	with rasterio.open('files/Soil_Erosion_Risk.tif', "w", **ra_meta) as risk_final_dataset:
-		risk_final_dataset.write(risk_final)  # output of combination of slope/soil/rainfall risk plus landcover risk
+		risk_final_dataset.write(risk_final)  # Output of combination of slope/soil/rainfall risk plus landcover risk.
 	print('Soil Erosion Risk tif has been created.')
+
+# Displaying the generated image after running the script.
+with rio.open('files/Soil_Erosion_Risk.tif') as dataset:
+    img = dataset.read()
+    xmin, ymin, xmax, ymax = dataset.bounds
+
+myCRS = str(cooref) # Converting CRS from research area into string, as CRS itself cannot be sliced using [5:].
+myCRS = ccrs.epsg(myCRS[5:]) # Overwriting myCRS with usable data by obtaining projection from EPSG code.
+fig, ax = plt.subplots(1, 1, figsize=(10, 10), subplot_kw=dict(projection=myCRS))
+ax.imshow(np.squeeze(img), cmap='gray', transform=myCRS, extent=[xmin, xmax, ymin, ymax])
