@@ -41,18 +41,20 @@ else:
 
 # Code for clipping adapted from https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
 def getFeatures(gdf):
-    # Function to transform research area shapefile into coordinates that rasterio can use.
+    """Function to transform research area shapefile into coordinates that rasterio can use."""
     import json
     return [json.loads(gdf.to_json())['features'][0]['geometry']]
 
 clip_coords = getFeatures(research_area) # Boundary of research_area assigned as coordinates to clip_coords
 
 def image_clip(input, output):
-	# The function will ensure that input data has identical CRS as research_area.shp, otherwise an error will occur.
-	# Afterwards the input data will be clipped to the extent of the research area and a new file will be saved to
-	# the output, with meta data being copied and adjusted from the original input. Should the file defined via output
-	# exist, then it will be deleted and replaced by the newly generated one. Input should be a filepath leading to
-	# a suitable existing tif file, output defines the name and location of the output file.
+	"""Function to check CRS of files and clip them to research area.
+
+	The function will ensure that input data has identical CRS as research_area.shp, otherwise an error will occur.
+	Afterwards the input data will be clipped to the extent of the research area and a new file will be saved to
+	the output, with meta data being copied and adjusted from the original input. Should the file defined via output
+	exist, then it will be deleted and replaced by the newly generated one. Input should be a filepath leading to
+	a suitable existing tif file, output defines the name and location of the output file."""
 	with rio.open(input) as dataset:
 		if dataset.crs == cooref:  # Script only continues when crs for research_area and soil.tif are identical
 			out_img, out_transform = mask(dataset=dataset, shapes=clip_coords,
