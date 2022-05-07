@@ -1,0 +1,14 @@
+name: erosion_risk
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - numpy
+  - geopandas
+  - cartopy
+  - matplotlib
+  - rasterio
+  - pycrs
+  - os
+  - pathlib
