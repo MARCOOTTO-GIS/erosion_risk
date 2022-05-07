@@ -12,12 +12,14 @@ import os
 
 # Additional work to be added: input for user specifying file names and/or explaining file import restrictions.
 
-# Script assumes that raster imagery is prepared with identical resolution/identical cell size
+# Script assumes that raster imagery is prepared with identical resolution/identical cell size.
+
+# Checking file locations of tif files and all files typically belonging to a shapefile to confirm that they exist.
+# If they do not exist, an error message is printed and the script execution is stopped.
 paths = ('files/soil.tif', 'files/rainfall.tif', 'files/landcover.tif', 'files/slope.tif', 'files/research_area.shp',
 		 'files/research_area.dbf','files/research_area.shx')
 		# 'files/research_area.cpg', 'files/research_area.prj', 'files/research_area.sbn', 'files/research_area.shp.xml',
 		# 'files/research_area.sbx' These are optional parts of the shapefiles, consider adding checks.
-        # Checking file locations of tif files and all files typically belonging to a shapefile to confirm that they exist.
 
 for path in paths:
 	p = Path(path)
@@ -27,17 +29,17 @@ for path in paths:
 		print('One or more files in incorrect location or not named correctly, please review README for instructions.')
 		quit()
 
-research_area = gpd.read_file('files/research_area.shp') # assigning research shapefile to variable using geopandas
+research_area = gpd.read_file('files/research_area.shp') # Assigning research shapefile to variable using geopandas.
 
 if research_area.crs != None:
-	cooref = research_area.crs # variable cooref is assigned the CRS from the research_area shapefile if it has one
+	cooref = research_area.crs # Variable cooref is assigned the CRS from the research_area shapefile if it has one.
 	print('CRS used for project: ' + str(research_area.crs)+'.')
 
 else:
 	print('No Coordinate Reference System found in Research Area Shapefile, please check README.')
-	quit() # If the research_area shapefile does not have a CRS, then the script will print an error and exit
+	quit() # If the research_area shapefile does not have a CRS, then the script will print an error and exit.
 
-# Consider adding user input for CRS if research_area does not have one
+# Consider adding user input for CRS if research_area does not have one.
 
 # Code for clipping adapted from https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
 def getFeatures(gdf):
@@ -70,17 +72,17 @@ def image_clip(input, output):
 							 "transform": out_transform,
 							 "crs": pycrs.parse.from_epsg_code(
 								 epsg_code).to_proj4()})  # updating meta data for new cropped image
-			global ra_meta # setting ra_meta as global variable for use outside of function
+			global ra_meta # Setting ra_meta as global variable for use outside of function.
 			ra_meta = out_meta  # ra_meta as variable to be used later outside this statement, out_meta should be identical
 								# for all inputs, therefore having it overwritten when the function is called again is okay.
 			if os.path.exists(output):
-				os.remove(output)  # deletes clipped file if it exists so that script can be run repeatedly
+				os.remove(output)  # deletes clipped file if it exists so that script can be run repeatedly.
 				with rasterio.open(output, "w", **out_meta) as clip:
-					clip.write(out_img)  # output of clipped image with updated meta data
+					clip.write(out_img)  # output of clipped image with updated meta data.
 					print('Old {} has been replaced.'.format(output))
 			else:
 				with rasterio.open(output, "w", **out_meta) as clip:
-					clip.write(out_img)  # output of clipped image with updated meta data
+					clip.write(out_img)  # output of clipped image with updated meta data.
 					print('Old {} has been replaced.'.format(output))
 
 		else:
@@ -233,7 +235,7 @@ if os.path.exists('files/Soil_Erosion_Risk.tif'):
 else:
 	with rasterio.open('files/Soil_Erosion_Risk.tif', "w", **ra_meta) as risk_final_dataset:
 		risk_final_dataset.write(risk_final)  # Output of combination of slope/soil/rainfall risk plus landcover risk.
-	print('Soil Erosion Risk tif has been created.')
+	print('Soil_Erosion_Risk.tif has been created.')
 
 # Displaying the generated image after running the script, applicable to the use of the script in a Jupyter Notebook
 # and is intended only to give an overview, with a colour map going from dark green (no risk) to dark red (very high
