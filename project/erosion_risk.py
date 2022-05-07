@@ -2,26 +2,20 @@ import numpy as np
 import rasterio as rio
 import geopandas as gpd
 import cartopy.crs as ccrs
-from cartopy.feature import ShapelyFeature
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import matplotlib.lines as mlines
 from pathlib import Path
 import rasterio.warp
-from rasterio.plot import show
-from rasterio.plot import show_hist
 from rasterio.mask import mask
-from shapely.geometry import box
-from fiona.crs import from_epsg
 import pycrs
 import os
 
-# Additional work to be added: input for user specifying file names and/or explaining file import restrictions
+
+# Additional work to be added: input for user specifying file names and/or explaining file import restrictions.
 
 # Script assumes that raster imagery is prepared with identical resolution/identical cell size
-paths = ('files/soil.tif','files/rainfall.tif','files/landcover.tif','files/slope.tif','files/research_area.shp',
+paths = ('files/soil.tif', 'files/rainfall.tif', 'files/landcover.tif', 'files/slope.tif', 'files/research_area.shp',
 		 'files/research_area.dbf','files/research_area.shx')
-		# 'files/research_area.cpg','files/research_area.prj','files/research_area.sbn','files/research_area.shp.xml',
+		# 'files/research_area.cpg', 'files/research_area.prj', 'files/research_area.sbn', 'files/research_area.shp.xml',
 		# 'files/research_area.sbx' These are optional parts of the shapefiles, consider adding checks.
         # Checking file locations of tif files and all files typically belonging to a shapefile to confirm that they exist.
 
@@ -41,136 +35,79 @@ if research_area.crs != None:
 
 else:
 	print('No Coordinate Reference System found in Research Area Shapefile, please check README.')
-	quit()	# If the research_area shapefile does not have a CRS, then the script will print an error and exit
+	quit() # If the research_area shapefile does not have a CRS, then the script will print an error and exit
 
 # Consider adding user input for CRS if research_area does not have one
 
 # Code for clipping adapted from https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
 def getFeatures(gdf):
-    # Function to transform research area shapefile into coordinates that rasterio can use
+    # Function to transform research area shapefile into coordinates that rasterio can use.
     import json
     return [json.loads(gdf.to_json())['features'][0]['geometry']]
 
 clip_coords = getFeatures(research_area) # Boundary of research_area assigned as coordinates to clip_coords
 
-# The following four blocks check if the different tifs have the same CRS as the research area and clip the tif
-# to the boundaries of the research area if True. If not, the script is quit with an appropriate error message.
-# The clipped tifs are then saved (existing tifs with the name are deleted beforehand) as they might be helpful
-# for other processing not covered in this script.
-with rio.open('files/soil.tif') as dataset1:
-	if dataset1.crs == cooref: # Script only continues when crs for research_area and soil.tif are identical
-		out_img, out_transform = mask(dataset=dataset1, shapes=clip_coords, crop=True) # Cropping image to research_area
-		out_meta = dataset1.meta.copy() # Copying original image meta data
-		epsg_code = int(dataset1.crs.data['init'][5:]) # Reading CRS data from original image
-		epsg_later = epsg_code # Saving EPSG code of project for later use.
-		out_meta.update({"driver": "GTiff",
-						 "height": out_img.shape[1],
-						 "width": out_img.shape[2],
-						 "transform": out_transform,
-						 "crs": pycrs.parse.from_epsg_code(epsg_code).to_proj4()}) # updating meta data for new cropped image
-		ra_meta = out_meta  # ra_meta as variable to be used later outside this if statement
-		if os.path.exists('files/soil_clip.tif'):
-			os.remove('files/soil_clip.tif') # deletes clipped file if it exists so that script can be run repeatedly
-			with rasterio.open('files/soil_clip.tif', "w", **out_meta) as soil_clip:
-				soil_clip.write(out_img) # output of clipped image with updated meta data
-				print('Old soil_clip.tif has been replaced.')
+def image_clip(input, output):
+	# The function will ensure that input data has identical CRS as research_area.shp, otherwise an error will occur.
+	# Afterwards the input data will be clipped to the extent of the research area and a new file will be saved to
+	# the output, with meta data being copied and adjusted from the original input. Should the file defined via output
+	# exist, then it will be deleted and replaced by the newly generated one. Input should be a filepath leading to
+	# a suitable existing tif file, output defines the name and location of the output file.
+	with rio.open(input) as dataset:
+		if dataset.crs == cooref:  # Script only continues when crs for research_area and soil.tif are identical
+			out_img, out_transform = mask(dataset=dataset, shapes=clip_coords,
+										  crop=True)  # Cropping image to research_area
+			out_meta = dataset.meta.copy()  # Copying original image meta data
+			epsg_code = int(dataset.crs.data['init'][5:])  # Reading CRS data from original image
+			global epsg_later # setting epsg_later as global variable for use outside of function
+			epsg_later = epsg_code  # Saving EPSG code of project for later use, which is identical for all inputs so
+									# overwriting it when function is called again does not change values.
+			out_meta.update({"driver": "GTiff",
+							 "height": out_img.shape[1],
+							 "width": out_img.shape[2],
+							 "transform": out_transform,
+							 "crs": pycrs.parse.from_epsg_code(
+								 epsg_code).to_proj4()})  # updating meta data for new cropped image
+			global ra_meta # setting ra_meta as global variable for use outside of function
+			ra_meta = out_meta  # ra_meta as variable to be used later outside this statement, out_meta should be identical
+								# for all inputs, therefore having it overwritten when the function is called again is okay.
+			if os.path.exists(output):
+				os.remove(output)  # deletes clipped file if it exists so that script can be run repeatedly
+				with rasterio.open(output, "w", **out_meta) as clip:
+					clip.write(out_img)  # output of clipped image with updated meta data
+					print('Old {} has been replaced.'.format(output))
+			else:
+				with rasterio.open(output, "w", **out_meta) as clip:
+					clip.write(out_img)  # output of clipped image with updated meta data
+					print('Old {} has been replaced.'.format(output))
+
 		else:
-			with rasterio.open('files/soil_clip.tif', "w", **out_meta) as soil_clip:
-				soil_clip.write(out_img) # output of clipped image with updated meta data
-				print('soil_clip.tif has been created.')
-		with rasterio.open('files/soil_clip.tif') as clipped_soil: # necessary as the previously opened clipped tifs were
-			soil = clipped_soil.read()							   # opened in write mode, preventing rasterio from reading
-																   # assigning clipped tif to variable as numpy array
+			print('Coordinate Reference System for {} not identical to Research Area CRS.',input)
+			quit()
 
-	else:
-		print('Coordinate Reference System for soil.tif not identical to Research Area CRS.')
-		quit()
+image_clip('files/soil.tif','files/soil_clip.tif') # Calling function to check soil CRS and clip tif.
+with rasterio.open('files/soil_clip.tif') as clipped:  	# Necessary as the previously opened clipped tifs from function
+	soil = clipped.read()  								# were opened in write mode, preventing rasterio from reading.
+	 													# Assigning clipped tif to variable as numpy array.
 
-with rio.open('files/rainfall.tif') as dataset2:
-	if dataset2.crs == cooref: # script only continues when crs for research_area and rainfall.tif are identical
-		out_img, out_transform = mask(dataset=dataset2, shapes=clip_coords, crop=True)
-		out_meta = dataset2.meta.copy()
-		epsg_code = int(dataset2.crs.data['init'][5:])
-		out_meta.update({"driver": "GTiff",
-						 "height": out_img.shape[1],
-						 "width": out_img.shape[2],
-						 "transform": out_transform,
-						 "crs": pycrs.parse.from_epsg_code(epsg_code).to_proj4()})
-		if os.path.exists('files/rainfall_clip.tif'):
-			os.remove('files/rainfall_clip.tif') # deletes clipped file if it exists so that script can be run repeatedly
-			with rasterio.open('files/rainfall_clip.tif', "w", **out_meta) as rainfall_clip:
-				rainfall_clip.write(out_img) # output of clipped image with updated meta data
-				print('Old rainfall_clip.tif has been replaced.')
-		else:
-			with rasterio.open('files/rainfall_clip.tif', "w", **out_meta) as rainfall_clip:
-				rainfall_clip.write(out_img) # output of clipped image with updated meta data
-				print('rainfall_clip.tif has been created.')
-		with rasterio.open('files/rainfall_clip.tif') as clipped_rainfall: # necessary as the previously opened clipped tifs were
-			rainfall = clipped_rainfall.read()  					# opened in write mode, preventing rasterio from reading
-																	# assigning clipped tif to variable as numpy array
-	else:
-		print('Coordinate Reference System for rainfall.tif not identical to Research Area CRS.')
-		quit()
+# Repeating above steps for remaining files.
+image_clip('files/rainfall.tif','files/rainfall_clip.tif')
+with rasterio.open('files/rainfall_clip.tif') as clipped:
+	rainfall = clipped.read()
 
-with rio.open('files/landcover.tif') as dataset3:
-	if dataset3.crs == cooref:  # script only continues when crs for research_area and landcover.tif are identical
-		out_img, out_transform = mask(dataset=dataset3, shapes=clip_coords, crop=True)
-		out_meta = dataset3.meta.copy()
-		epsg_code = int(dataset3.crs.data['init'][5:])
-		out_meta.update({"driver": "GTiff",
-						 "height": out_img.shape[1],
-						 "width": out_img.shape[2],
-						 "transform": out_transform,
-						 "crs": pycrs.parse.from_epsg_code(epsg_code).to_proj4()})
-		if os.path.exists('files/landcover_clip.tif'):
-			os.remove('files/landcover_clip.tif') # deletes clipped file if it exists so that script can be run repeatedly
-			with rasterio.open('files/landcover_clip.tif', "w", **out_meta) as landcover_clip:
-				landcover_clip.write(out_img) # output of clipped image with updated meta data
-			print('Old landcover_clip.tif has been replaced.')
-		else:
-			with rasterio.open('files/landcover_clip.tif', "w", **out_meta) as landcover_clip:
-				landcover_clip.write(out_img) # output of clipped image with updated meta data
-				print('landcover_clip.tif has been created.')
-		with rasterio.open('files/landcover_clip.tif') as clipped_landcover: # necessary as the previously opened clipped tifs were
-			landcover = clipped_landcover.read()  	# opened in write mode, preventing rasterio from reading
-													# assigning clipped tif to variable as numpy array
-	else:
-		print('Coordinate Reference System for landcover.tif not identical to Research Area CRS.')
-		quit()
+image_clip('files/landcover.tif','files/landcover_clip.tif')
+with rasterio.open('files/landcover_clip.tif') as clipped:
+	landcover = clipped.read()
 
-with rio.open('files/slope.tif') as dataset4:
-	if dataset4.crs == cooref:  # script only continues when crs for research_area and slope.tif are identical
-		out_img, out_transform = mask(dataset=dataset4, shapes=clip_coords, crop=True)
-		out_meta = dataset4.meta.copy()
-		epsg_code = int(dataset4.crs.data['init'][5:])
-		out_meta.update({"driver": "GTiff",
-						 "height": out_img.shape[1],
-						 "width": out_img.shape[2],
-						 "transform": out_transform,
-						 "crs": pycrs.parse.from_epsg_code(epsg_code).to_proj4()})
-		if os.path.exists('files/slope_clip.tif'):
-			os.remove('files/slope_clip.tif') # deletes clipped file if it exists so that script can be run repeatedly
-			with rasterio.open('files/slope_clip.tif', "w", **out_meta) as slope_clip:
-				slope_clip.write(out_img) # output of clipped image with updated meta data
-			print('Old slope_clip.tif has been replaced.')
-		else:
-			with rasterio.open('files/slope_clip.tif', "w", **out_meta) as slope_clip:
-				slope_clip.write(out_img) # output of clipped image with updated meta data
-				print('slope_clip.tif has been created.')
-		with rasterio.open('files/slope_clip.tif') as clipped_slope: # necessary as the previously opened clipped tifs were
-			slope = clipped_slope.read()  							 # opened in write mode, preventing rasterio from reading
-																	 # assigning clipped tif to variable as numpy array
-	else:
-		print('Coordinate Reference System for slope.tif not identical to Research Area CRS.')
-		quit()
+image_clip('files/slope.tif','files/slope_clip.tif')
+with rasterio.open('files/slope_clip.tif') as clipped:
+	slope = clipped.read()
 
-
-
-# the following code works, but had to be deprecated due to HOW it works: the CRS of the research_area is applied
+# The following code works, but had to be deprecated due to HOW it works: the CRS of the research_area is applied
 # to an existing tif file, creating a transformed new tif, however due to the transformation the cell/pixel
 # size may be changed slightly. This would, without work that was not able to be completed, prevent a raster
 # calculation to work correctly, as the pixels no longer overlay correctly. Instead, the script will stop with
-# an error message if the CRS of one of the files does not match the research_area CRS. Leaving for future use.
+# an error message if the CRS of one of the files does not match the research_area CRS. Leaving for potential future use.
 '''
 dst_crs = cooref  # destination CRS is based on the previously assigned CRS of the research_area,
 			   # following script adapted from https://rasterio.readthedocs.io/en/latest/topics/reproject.html
@@ -197,6 +134,7 @@ with rio.open('files/soil.tif') as src:
 				dst_crs=dst_crs,
 				resampling=rio.warp.Resampling.nearest)
 '''
+
 # Visual check that each variable is assigned a numpy array, not required for further processing and meant as a way to
 # ensure integrity of data.
 print('Data types: soil: '+ str(type(soil)) + ' , rainfall: ' + str(type(rainfall)) + ' , landcover: '
@@ -204,7 +142,7 @@ print('Data types: soil: '+ str(type(soil)) + ' , rainfall: ' + str(type(rainfal
 
 # Calculations combining risk factors soil, slope and rainfall as follows, an error will appear if one or more of the
 # tifs cover a smaller extent than the research area. Consider adding check by comparing width and height of clipped tifs.
-# The * 1 ensures that the output is saved as integer, otherwise it would be saved as boolean.
+# The * 1 ensures that the output is saved as integer, otherwise it would be saved as Boolean.
 very_high = ((soil == 1) & (slope > 7) & (rainfall >= 800)) * 1
 high = ((soil == 1) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) * 1 | \
 	   ((soil == 2) & (slope > 7) & (rainfall >= 800)) * 1 | \
@@ -236,6 +174,8 @@ risk1 = very_high + high + moderate + lower + slight
 # The following is code to save each risk category and the combination thereof as tif files for potential trouble-
 # shooting use and/or verification of the results so far. Uncomment for use but note that if files already exist there
 # might appear errors as no conditions to delete/ignore existing files were added. Manual deletion beforehand advised.
+# Also, these files will have no metadata, but CRS is identical to original research_area.shp.
+
 with rasterio.open('files/risk1.tif', "w", **ra_meta) as risk1_dataset:
 	risk1_dataset.write(risk1)  # output of combination of slope/soil/rainfall risk
 
@@ -255,7 +195,7 @@ with rasterio.open('files/slight.tif', "w", **ra_meta) as slight_risk:
 	slight_risk.write(slight)  # output of clipped image with updated meta data
 '''
 
-# Calculation to combine previously created risk map consisting of soil, rainfall and slope, with landcover.
+# Calculation to combine previously created risk dataset consisting of soil, rainfall and slope, with landcover.
 very_high_final = ((landcover == 4) & (risk1 == 5)) * 1
 high_final = ((landcover == 3) & (risk1 == 5)) * 1 | \
 			 ((landcover == 4) & (risk1 >= 3) & (risk1 <= 4)) * 1
@@ -293,7 +233,10 @@ else:
 		risk_final_dataset.write(risk_final)  # Output of combination of slope/soil/rainfall risk plus landcover risk.
 	print('Soil Erosion Risk tif has been created.')
 
-# Displaying the generated image after running the script.
+# Displaying the generated image after running the script, applicable to the use of the script in a Jupyter Notebook
+# and is intended only to give an overview, with a colour map going from dark green (no risk) to dark red (very high
+# risk). Further work should be considered by adding a legend, scale bar and potentially a north arrow.
+
 with rio.open('files/Soil_Erosion_Risk.tif') as dataset:
     img = dataset.read()
     xmin, ymin, xmax, ymax = dataset.bounds
@@ -301,4 +244,7 @@ with rio.open('files/Soil_Erosion_Risk.tif') as dataset:
 myCRS = str(cooref) # Converting CRS from research area into string, as CRS itself cannot be sliced using [5:].
 myCRS = ccrs.epsg(myCRS[5:]) # Overwriting myCRS with usable data by obtaining projection from EPSG code.
 fig, ax = plt.subplots(1, 1, figsize=(10, 10), subplot_kw=dict(projection=myCRS))
-ax.imshow(np.squeeze(img), cmap='gray', transform=myCRS, extent=[xmin, xmax, ymin, ymax])
+
+# np.squeeze is required as array would otherwise be considered three-dimensional, colour map reversed using _r
+# to visualize risk in a meaningful way.
+ax.imshow(np.squeeze(img), cmap='RdYlGn_r', transform=myCRS, extent=[xmin, xmax, ymin, ymax])
