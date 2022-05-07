@@ -63,9 +63,6 @@ def image_clip(input, output):
 										  crop=True)  # Cropping image to research_area
 			out_meta = dataset.meta.copy()  # Copying original image meta data
 			epsg_code = int(dataset.crs.data['init'][5:])  # Reading CRS data from original image
-			global epsg_later # setting epsg_later as global variable for use outside of function
-			epsg_later = epsg_code  # Saving EPSG code of project for later use, which is identical for all inputs so
-									# overwriting it when function is called again does not change values.
 			out_meta.update({"driver": "GTiff",
 							 "height": out_img.shape[1],
 							 "width": out_img.shape[2],
@@ -83,13 +80,13 @@ def image_clip(input, output):
 			else:
 				with rasterio.open(output, "w", **out_meta) as clip:
 					clip.write(out_img)  # output of clipped image with updated meta data.
-					print('Old {} has been replaced.'.format(output))
+					print('Old {} has been created.'.format(output))
 
 		else:
-			print('Coordinate Reference System for {} not identical to Research Area CRS.',input)
+			print('Coordinate Reference System for {} not identical to Research Area CRS.'.format(input))
 			quit()
 
-image_clip('files/soil.tif','files/soil_clip.tif') # Calling function to check soil CRS and clip tif.
+image_clip('files/soil.tif','files/soil_clip.tif')		# Calling function to check soil CRS and clip tif.
 with rasterio.open('files/soil_clip.tif') as clipped:  	# Necessary as the previously opened clipped tifs from function
 	soil = clipped.read()  								# were opened in write mode, preventing rasterio from reading.
 	 													# Assigning clipped tif to variable as numpy array.
@@ -162,7 +159,8 @@ slight = ((soil == 1) & (slope < 2) & (rainfall >= 800)) * 1 | \
 		 ((soil == 2) & (slope < 2) & (rainfall >= 800)) * 1 | \
 		 ((soil == 3) & (slope >= 3) & (slope <= 7) & (rainfall >= 800)) * 1 | \
 		 ((soil == 3) & (slope >= 2) & (slope <= 3) & (rainfall >= 800)) * 1 | \
-		 ((soil == 3) & (slope < 2) & (rainfall >= 800)) * 1
+		 ((soil == 3) & (slope < 2) & (rainfall >= 800)) * 1 | \
+		 (soil == 4) * 1
 
 # Reclassification to allow combination of very high to slight risk. Changing  1 to 1 (value for slight is not changed),
 # 2 (lower), 3 (moderate), 4 (high) and 5 (very high).
@@ -241,7 +239,7 @@ else:
 # and is intended only to give an overview, with a colour map going from dark green (no risk) to dark red (very high
 # risk). Further work should be considered by adding a legend, scale bar and potentially a north arrow.
 
-with rio.open('files/Soil_Erosion_Risk.tif') as dataset:
+with rio.open('files/Soil_Erosion_Risk.tif') as dataset: # Required as datasets in write mode cannot be read.
     img = dataset.read()
     xmin, ymin, xmax, ymax = dataset.bounds
 
@@ -249,6 +247,6 @@ myCRS = str(cooref) # Converting CRS from research area into string, as CRS itse
 myCRS = ccrs.epsg(myCRS[5:]) # Overwriting myCRS with usable data by obtaining projection from EPSG code.
 fig, ax = plt.subplots(1, 1, figsize=(10, 10), subplot_kw=dict(projection=myCRS))
 
-# np.squeeze is required as array would otherwise be considered three-dimensional, colour map reversed using _r
+# np.squeeze is required as array would otherwise be considered three-dimensional, colour ramp reversed using _r
 # to visualize risk in a meaningful way.
 ax.imshow(np.squeeze(img), cmap='RdYlGn_r', transform=myCRS, extent=[xmin, xmax, ymin, ymax])
